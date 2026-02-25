@@ -17,9 +17,10 @@ A simple Python script that transcribes audio files to text using OpenAI's Whisp
 
 ## Installation
 
-1. **Clone or navigate to this repository**
+1. **Clone this repository**
    ```bash
-   cd /Users/charlesonu/Documents/code-projects/audio-transcribe
+   git clone https://github.com/onucharles/audio-transcribe.git
+   cd audio-transcribe
    ```
 
 2. **Install dependencies**
