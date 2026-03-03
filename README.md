@@ -1,11 +1,12 @@
 # Audio Transcription Tool
 
-A simple Python script that transcribes audio files to text using OpenAI's Whisper API. Supports various audio formats including M4A, MP3, WAV, and more.
+A simple Python script that transcribes audio files to text using OpenAI's Whisper API and generates formatted PDF documents. Supports various audio formats including M4A, MP3, WAV, and more.
 
 ## Features
 
 - 🎯 Transcribe audio files to text using OpenAI's state-of-the-art Whisper model
-- 📝 Save transcriptions to a text file or print to console
+- 📄 Automatically generates formatted PDF documents with transcriptions
+- 📅 Includes transcription date/time at the top of each PDF
 - ⏱️ Optional timestamp support to track when each segment was spoken
 - 🎵 Supports multiple audio formats (m4a, mp3, wav, etc.)
 - 🔐 Secure API key management using environment variables
@@ -44,28 +45,28 @@ A simple Python script that transcribes audio files to text using OpenAI's Whisp
 
 ### Basic Usage
 
-Transcribe an audio file and print to console:
+Transcribe an audio file to PDF (saves to `output/transcription_YYYYMMDD_HHMMSS.pdf`):
 ```bash
 python transcribe.py my-audio.m4a
 ```
 
-### Save to File
+### Custom Output Path
 
-Save transcription to a text file:
+Save transcription to a specific PDF file:
 ```bash
-python transcribe.py my-audio.m4a -o output.txt
+python transcribe.py my-audio.m4a -o my-transcript.pdf
 ```
 
 ### Include Timestamps
 
-Get transcription with timestamps for each segment:
+Generate PDF with timestamps for each segment:
 ```bash
 python transcribe.py my-audio.m4a --timestamps
 ```
 
-Or save timestamped transcription to file:
+Or with custom output path:
 ```bash
-python transcribe.py my-audio.m4a --timestamps -o output.txt
+python transcribe.py my-audio.m4a --timestamps -o meeting-notes.pdf
 ```
 
 ### Command Line Options
@@ -79,7 +80,7 @@ positional arguments:
 optional arguments:
   -h, --help            Show help message and exit
   -o OUTPUT, --output OUTPUT
-                        Output file path (optional, prints to stdout if not specified)
+                        Output PDF file path (defaults to output/transcription_YYYYMMDD_HHMMSS.pdf)
   --timestamps          Include timestamps in output
 ```
 
@@ -90,9 +91,10 @@ audio-transcribe/
 ├── transcribe.py      # Main transcription script
 ├── requirements.txt   # Python dependencies
 ├── .env              # Environment variables (API key) - create this
-├── my-audio.m4a      # Example audio file
-├── output.txt        # Example output file
-└── README.md         # This file
+├── .gitignore        # Git ignore rules
+├── output/           # Output directory for PDF transcriptions (auto-created)
+├── README.md         # This file
+└── my-audio.m4a      # Example audio file (not tracked in git)
 ```
 
 ## How It Works
@@ -100,7 +102,8 @@ audio-transcribe/
 1. **Input**: The script accepts an audio file path as input
 2. **Processing**: It reads the audio file and sends it to OpenAI's Whisper API
 3. **Response**: The API returns the transcribed text with optional segment timestamps
-4. **Output**: Results are either printed to console or saved to a specified file
+4. **PDF Generation**: The transcription is formatted into a professional PDF document with the date/time header
+5. **Output**: The PDF is saved to the `output/` directory (or custom path if specified)
 
 ## Supported Audio Formats
 
@@ -124,17 +127,30 @@ The script handles common errors:
 
 ## Example Output
 
-**Without timestamps:**
+All transcriptions are saved as PDF files with:
+- **Date header**: "Transcribed on: March 03, 2026 at 02:45 PM"
+- **Professional formatting**: Clean layout with proper margins and spacing
+- **Optional timestamps**: When `--timestamps` flag is used
+
+**PDF content without timestamps:**
 ```
+Audio Transcription
+Transcribed on: March 03, 2026 at 02:45 PM
+
 This is an example transcription of the audio file. The text flows naturally without any time markers.
 ```
 
-**With timestamps:**
+**PDF content with timestamps:**
 ```
+Audio Transcription
+Transcribed on: March 03, 2026 at 02:45 PM
+
 [0.00s - 3.45s] This is an example transcription
 [3.45s - 7.20s] of the audio file with timestamps
 [7.20s - 10.15s] showing when each segment was spoken.
 ```
+
+Output files are saved to `output/` directory by default with timestamped filenames like `transcription_20260303_144522.pdf`.
 
 ## API Costs
 
@@ -156,6 +172,7 @@ The Whisper API has a 25 MB file size limit. Compress or split your audio file i
 The script uses:
 - `openai` library for API interactions
 - `python-dotenv` for environment variable management
+- `reportlab` for PDF generation
 - `argparse` for command-line argument parsing
 - `pathlib` for cross-platform file path handling
 
@@ -166,14 +183,17 @@ This is a personal utility script. Use it as you wish!
 ## Quick Reference
 
 ```bash
-# Basic transcription
+# Basic transcription (saves to output/transcription_YYYYMMDD_HHMMSS.pdf)
 python transcribe.py audio.m4a
 
-# Save to file
-python transcribe.py audio.m4a -o output.txt
+# Custom PDF output path
+python transcribe.py audio.m4a -o my-transcript.pdf
 
 # With timestamps
-python transcribe.py audio.m4a --timestamps -o output.txt
+python transcribe.py audio.m4a --timestamps
+
+# With timestamps and custom path
+python transcribe.py audio.m4a --timestamps -o meeting-notes.pdf
 
 # Set API key (if not in .env)
 export OPENAI_API_KEY='sk-...'

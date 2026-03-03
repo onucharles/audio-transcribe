@@ -43,6 +43,7 @@ env/
 .DS_Store
 
 # Output files (transcription results)
+output/
 output*.txt
 
 # Audio files (usually large, commit specific ones intentionally)
