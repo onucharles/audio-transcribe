@@ -1,7 +1,7 @@
 """
 Audio Transcription Script
 Transcribes M4A (and other audio formats) to text using OpenAI's Whisper API.
-Outputs transcriptions to PDF files with date headers.
+Outputs a plain-text transcript and AI-generated meeting notes.
 """
 
 import argparse
@@ -12,81 +12,82 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 load_dotenv()
 
 
-def generate_pdf(output_path: Path, transcription_text: str, transcription_date: str):
+def write_transcript_txt(output_path: Path, text: str, transcription_date: str):
     """
-    Generate a PDF file with the transcription.
-    
+    Write the raw transcript to a plain-text file.
+
     Args:
-        output_path: Path where the PDF should be saved
-        transcription_text: The transcription text to include
+        output_path: Path where the transcript should be saved
+        text: The transcription text
         transcription_date: The date/time when transcription was performed
     """
-    # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Create PDF document
-    doc = SimpleDocTemplate(
-        str(output_path),
-        pagesize=letter,
-        rightMargin=72,
-        leftMargin=72,
-        topMargin=72,
-        bottomMargin=18
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("Meeting Transcript\n")
+        f.write(f"Transcribed on: {transcription_date}\n")
+        f.write("-" * 60 + "\n\n")
+        f.write(text)
+        f.write("\n")
+
+
+def generate_meeting_notes(client: OpenAI, transcript_text: str) -> str:
+    """
+    Generate concise meeting notes from a transcript using GPT-4o.
+
+    Args:
+        client: An initialised OpenAI client
+        transcript_text: The full transcript text
+
+    Returns:
+        A structured meeting notes string.
+    """
+    print("Generating meeting notes...")
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an expert meeting note-taker. "
+                    "Given a meeting transcript, produce concise, well-structured meeting notes. "
+                    "Your notes must include the following sections:\n\n"
+                    "1. Summary — a short paragraph capturing the overall purpose and outcome of the meeting.\n"
+                    "2. Key Discussion Points — bullet list of the main topics discussed.\n"
+                    "3. Decisions Made — bullet list of any decisions or agreements reached.\n"
+                    "4. Action Items — bullet list of tasks, owners (if mentioned), and deadlines (if mentioned).\n\n"
+                    "Be concise. Do not reproduce the transcript verbatim. "
+                    "If a section has nothing to report, write 'None noted.'"
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Here is the meeting transcript:\n\n{transcript_text}",
+            },
+        ],
     )
-    
-    # Container for PDF elements
-    story = []
-    styles = getSampleStyleSheet()
-    
-    # Add custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        textColor='#2c3e50',
-        spaceAfter=6
-    )
-    
-    date_style = ParagraphStyle(
-        'DateStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor='#7f8c8d',
-        spaceAfter=20
-    )
-    
-    body_style = ParagraphStyle(
-        'BodyStyle',
-        parent=styles['Normal'],
-        fontSize=11,
-        leading=16,
-        spaceAfter=12
-    )
-    
-    # Add title
-    story.append(Paragraph("Audio Transcription", title_style))
-    
-    # Add date
-    story.append(Paragraph(f"Transcribed on: {transcription_date}", date_style))
-    story.append(Spacer(1, 0.2 * inch))
-    
-    # Add transcription text (handle line breaks)
-    for paragraph in transcription_text.split('\n'):
-        if paragraph.strip():
-            # Escape special characters for reportlab
-            safe_paragraph = paragraph.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            story.append(Paragraph(safe_paragraph, body_style))
-    
-    # Build PDF
-    doc.build(story)
+    return response.choices[0].message.content.strip()
+
+
+def write_notes_txt(output_path: Path, notes: str, transcription_date: str):
+    """
+    Write the AI-generated meeting notes to a plain-text file.
+
+    Args:
+        output_path: Path where the notes should be saved
+        notes: The meeting notes text
+        transcription_date: The date/time when transcription was performed
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("Meeting Notes\n")
+        f.write(f"Transcribed on: {transcription_date}\n")
+        f.write("-" * 60 + "\n\n")
+        f.write(notes)
+        f.write("\n")
 
 
 def transcribe_audio(audio_path: str) -> dict:
@@ -97,7 +98,7 @@ def transcribe_audio(audio_path: str) -> dict:
         audio_path: Path to the audio file (m4a, mp3, wav, etc.)
 
     Returns:
-        Dictionary containing transcription result with 'text' key.
+        Dictionary containing transcription result with 'text' and 'segments' keys.
     """
     audio_file = Path(audio_path)
 
@@ -127,13 +128,14 @@ def transcribe_audio(audio_path: str) -> dict:
         "segments": [
             {"start": seg.start, "end": seg.end, "text": seg.text}
             for seg in (response.segments or [])
-        ]
+        ],
+        "client": client,
     }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Transcribe audio files (m4a, mp3, wav, etc.) to PDF using OpenAI API"
+        description="Transcribe audio files (m4a, mp3, wav, etc.) and generate meeting notes using OpenAI"
     )
     parser.add_argument(
         "audio_file",
@@ -141,23 +143,28 @@ def main():
     )
     parser.add_argument(
         "-o", "--output",
-        help="Output PDF file path (optional, defaults to output/transcription_YYYYMMDD_HHMMSS.pdf)"
+        help=(
+            "Base name for output files (optional). "
+            "Two files will be written: <base>_transcript.txt and <base>_notes.txt. "
+            "Defaults to output/YYYYMMDD_HHMMSS"
+        )
     )
     parser.add_argument(
         "--timestamps",
         action="store_true",
-        help="Include timestamps in output"
+        help="Include timestamps in the transcript output"
     )
 
     args = parser.parse_args()
-    
-    # Generate transcription date
+
     transcription_date = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     try:
         result = transcribe_audio(args.audio_file)
+        client = result["client"]
 
-        # Format transcription text
+        # Format transcript text
         if args.timestamps:
             output_lines = []
             for segment in result["segments"]:
@@ -165,31 +172,33 @@ def main():
                 end = segment["end"]
                 text = segment["text"].strip()
                 output_lines.append(f"[{start:.2f}s - {end:.2f}s] {text}")
-            output_text = "\n".join(output_lines)
+            transcript_text = "\n".join(output_lines)
         else:
-            output_text = result["text"].strip()
+            transcript_text = result["text"].strip()
 
-        # Determine output path
+        # Determine output base path
         if args.output:
-            output_path = Path(args.output)
+            base = Path(args.output)
         else:
-            # Default to output/ directory with timestamped filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = Path("output") / f"transcription_{timestamp}.pdf"
-        
-        # Ensure output has .pdf extension
-        if output_path.suffix.lower() != '.pdf':
-            output_path = output_path.with_suffix('.pdf')
-        
-        # Generate PDF
-        generate_pdf(output_path, output_text, transcription_date)
-        print(f"✓ Transcription saved to: {output_path}")
+            base = Path("output") / timestamp
+
+        transcript_path = base.parent / f"{base.name}_transcript.txt"
+        notes_path = base.parent / f"{base.name}_notes.txt"
+
+        # Write transcript
+        write_transcript_txt(transcript_path, transcript_text, transcription_date)
+        print(f"Transcript saved to: {transcript_path}")
+
+        # Generate and write meeting notes
+        notes = generate_meeting_notes(client, transcript_text)
+        write_notes_txt(notes_path, notes, transcription_date)
+        print(f"Meeting notes saved to: {notes_path}")
 
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        print(f"Transcription failed: {e}", file=sys.stderr)
+        print(f"Failed: {e}", file=sys.stderr)
         sys.exit(1)
 
 
